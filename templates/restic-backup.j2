@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+
+# -------- Restic Backup Script ---------
+
+# Author: Inundation
+
+# Description:
+# This script is intended to be used as apart of a crontab job to perform periodic backups using restic.
+
+# Version Information:
+# v1.0.0 - Script creation.
+
+# Usage:
+# ./restic-backup.sh
+#
+# Cronjob Entry:
+# 30 20 * * * /opt/restic-backup/restic-backup.sh      # Run nightly at 10:30pm.
+
+# ---------------------------------------
+
+# -- Scripting Utilties --
+
+set -Eeuo pipefail
+trap cleanup SIGINT SIGTERM ERR EXIT
+
+SCRIPTDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
+
+# Cleanup function.
+# Executed when script error occurs.
+
+cleanup() {
+
+    trap - SIGINT SIGTERM ERR EXIT
+    # Not required for this script.
+
+}
+
+# Logging function.
+# Writes log information to STOUT and specified logfile.
+
+function log {
+  echo $TIMESTAMP $1
+  echo $TIMESTAMP $1 >> $LOGFILE
+}
+
+# -- Variables --
+
+# Load environment variables.
+source $SCRIPTDIR/.secrets
+
+# List of files/directories to backup. Separate multiple paths with spaces.
+BACKUP_PATHS="{{ restic_backup_paths }}"
+
+# Backup retention periods.
+RETENTION_DAYS={{ restic_retention_days }}      # Number of days to keep backups.
+RETENTION_WEEKS={{ restic_retention_weeks }}     # Number of weeks to keep backups.
+RETENTION_MONTHS={{ restic_retention_months }}    # Number of months to keep backups.
+RETENTION_YEARS={{ restic_retention_years }}     # Number of years to keep backups.
+
+# Logging location.
+LOGFILE={{ restic_logfile }}
+TIMESTAMP=$(date +%c)
+
+# -- Dependences --
+
+RESTIC="/usr/bin/restic"                  # Location of restic executable.
+
+# -- Process --
+
+log "STARTING BACKUP PROCESS"
+
+# Confirm Restic is installed.
+if [ ! -f $RESTIC ]; then
+    log "$RESTIC could not be found. Please install and re-run script. Exiting."; exit
+else
+    log "Confirmed $RESTIC is installed."
+fi
+
+# Check if Restic repository exists.
+if ! restic cat config > /dev/null 2>&1; then
+    restic init 2>&1
+fi
+
+# Remove locks if they exist.
+restic unlock
+
+if [ $? -ne 0 ]; then
+    log "Failed to unlock repository. Exiting."; exit
+fi
+
+# Perform a backup.
+restic backup \
+    $BACKUP_PATHS \
+    --one-file-system \
+
+if [ $? -ne 0 ]; then
+    log "Backup exited with error code. Exiting."; exit
+fi
+
+# Remove old backups.
+restic forget \
+    --prune \
+    --keep-daily $RETENTION_DAYS \
+    --keep-weekly $RETENTION_WEEKS \
+    --keep-monthly $RETENTION_MONTHS \
+    --keep-yearly $RETENTION_YEARS
+
+if [ $? -ne 0 ]; then
+    log "Pruning exited with error code. Exiting."; exit
+fi
+
+log "BACKUP PROCESS FINISHED"

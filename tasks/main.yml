@@ -1,0 +1,44 @@
+---
+# tasks file for app_restic
+
+- name: Install restic package.
+  ansible.builtin.apt: 
+    name: restic
+    state: latest
+    update_cache: yes
+
+- name: Create config directory.
+  ansible.builtin.file:
+    path: "{{ restic_config }}"
+    state: directory
+    mode: '0755'
+
+- name: Create restic backup script.
+  ansible.builtin.template:
+   src: "restic-backup.j2"
+   dest: "{{ config_directory }}/restic-backup.sh"
+   owner: root
+   group: root
+   mode: 0774
+
+- name: Create restic secret file.
+  ansible.builtin.template:
+   src: ".secrets.j2"
+   dest: "{{ config_directory }}/.secrets"
+   owner: root
+   group: root
+   mode: 0600
+
+- name: Add cronjob entry for restic-backup script.
+  ansible.builtin.cron:
+    name: "Nightly Restic Backups"
+    minute: "30"
+    hour: "20"
+    job: "{{ config_directory }}/restic-backup.sh"
+
+- name: Install logrotate entry for restic-backup.sh logs.
+  ansible.builtin.template:
+    src: "logrotate.j2"
+    dest: "/etc/logrotate.d/restic-backup"
+    owner: root
+    group: root

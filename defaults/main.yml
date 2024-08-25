@@ -1,0 +1,14 @@
+---
+# defaults file for ansible_rustic
+
+# Configuration directory.
+restic_config: "/opt/restic-backup"
+
+# Default retention values for backups.
+restic_retention_days: 14
+restic_retention_weeks: 4
+restic_retention_months: 12
+restic_retention_years: 3
+
+# Default logging location.
+restic_logfile: "/var/log/restic-backup.log"
